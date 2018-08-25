@@ -13,5 +13,6 @@ namespace mach {
   void InitializeLogger() {
     logger = spdlog::stdout_color_mt("logger");
     logger->set_level(spdlog::level::trace);
+    logger->set_pattern("%Y-%m-%d %T%z %L | %^%v%$");
   }
 }

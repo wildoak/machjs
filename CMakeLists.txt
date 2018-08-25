@@ -5,35 +5,53 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_CXX_FLAGS -stdlib=libc++)
 set(PROJECT machjs)
 
-MESSAGE("Building: " ${CMAKE_BUILD_TYPE})
+MESSAGE(Building: ${CMAKE_BUILD_TYPE})
 
 project (${PROJECT})
 
-# configuration
-set (MACHJS_VERSION_MAJOR 1)
-set (MACHJS_VERSION_MINOR 0)
-
-configure_file (
-  "${PROJECT_SOURCE_DIR}/src/version.h.in"
-  "${PROJECT_BINARY_DIR}/include-gen/version.h"
+execute_process(
+  COMMAND git describe --tags --always --dirty
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE MACHJS_VERSION
 )
 
-include_directories("${PROJECT_BINARY_DIR}/include-gen")
+execute_process(
+  COMMAND git log -1 --format=%ci
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE MACHJS_COMMIT_DATE
+)
+
+execute_process(
+  COMMAND date +%Y-%m-%d\ %H:%M:%S\ %z
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  OUTPUT_VARIABLE MACHJS_BUILD_DATE
+)
+
+MESSAGE(MACHJS_VERSION: ${MACHJS_VERSION})
+MESSAGE(MACHJS_COMMIT_DATE: ${MACHJS_COMMIT_DATE})
+MESSAGE(MACHJS_BUILD_DATE: ${MACHJS_BUILD_DATE})
+
+configure_file (
+  ${PROJECT_SOURCE_DIR}/src/version.h.in
+  ${PROJECT_BINARY_DIR}/include-gen/version.h
+)
+
+include_directories(${PROJECT_BINARY_DIR}/include-gen)
 
 # project sources
 file(GLOB SOURCE_FILES src/*.cc src/**/*.cc)
 add_executable(${PROJECT} ${SOURCE_FILES})
 
 # v8
-include_directories("${PROJECT_SOURCE_DIR}/deps/v8/include")
+include_directories(${PROJECT_SOURCE_DIR}/deps/v8/include)
 
-if (${CMAKE_BUILD_TYPE} MATCHES "Release")
+if (${CMAKE_BUILD_TYPE} MATCHES Release)
   set (V8_OBJ_DIR deps/v8/out/x64.release/obj)
 
   find_library(V8_LIBRARY_V8_LIBBASE NAMES v8_libbase HINTS ${V8_OBJ_DIR})
   find_library(V8_LIBRARY_V8_LIBPLATFORM NAMES v8_libplatform HINTS ${V8_OBJ_DIR})
-  find_library(V8_LIBRARY_ICUUC NAMES icuuc HINTS "${V8_OBJ_DIR}/third_party/icu")
-  find_library(V8_LIBRARY_ICUI18N NAMES icui18n HINTS "${V8_OBJ_DIR}/third_party/icu")
+  find_library(V8_LIBRARY_ICUUC NAMES icuuc HINTS ${V8_OBJ_DIR}/third_party/icu)
+  find_library(V8_LIBRARY_ICUI18N NAMES icui18n HINTS ${V8_OBJ_DIR}/third_party/icu)
 
 
   set (V8_LIBRARIES
@@ -80,7 +98,7 @@ include_directories(${CMAKE_SOURCE_DIR}/deps/spdlog/include)
 find_package(Threads)
 
 # libuv
-include_directories("${PROJECT_SOURCE_DIR}/deps/libuv/include")
+include_directories(${PROJECT_SOURCE_DIR}/deps/libuv/include)
 find_library(LIBUV_LIBRARY NAMES uv HINTS deps/libuv/out/Release)
 
 target_link_libraries(${PROJECT}
@@ -91,7 +109,7 @@ target_link_libraries(${PROJECT}
 
 # copy snapshots
 
-if (${CMAKE_BUILD_TYPE} MATCHES "Release")
+if (${CMAKE_BUILD_TYPE} MATCHES Release)
   file(COPY ${PROJECT_SOURCE_DIR}/deps/v8/out/x64.release/natives_blob.bin DESTINATION ${PROJECT_BINARY_DIR})
   file(COPY ${PROJECT_SOURCE_DIR}/deps/v8/out/x64.release/snapshot_blob.bin DESTINATION ${PROJECT_BINARY_DIR})
 else()

@@ -32,9 +32,9 @@ namespace mach {
       fn();
       return true;
     } catch(std::exception &e) {
-      std::cerr << e.what() << std::endl;
+      mach::logger->critical("error in nothrow: {}", e.what());
     } catch(...) {
-      std::cerr << "unknown error occurred" << std::endl;
+      mach::logger->critical("unknown error occurred");
     }
 
     return false;
