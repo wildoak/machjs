@@ -10,7 +10,6 @@ MESSAGE("Building: " ${CMAKE_BUILD_TYPE})
 project (${PROJECT})
 
 # configuration
-
 set (MACHJS_VERSION_MAJOR 1)
 set (MACHJS_VERSION_MINOR 0)
 
@@ -20,6 +19,10 @@ configure_file (
 )
 
 include_directories("${PROJECT_BINARY_DIR}/include-gen")
+
+# project sources
+file(GLOB SOURCE_FILES src/*.cc src/**/*.cc)
+add_executable(${PROJECT} ${SOURCE_FILES})
 
 # v8
 include_directories("${PROJECT_SOURCE_DIR}/deps/v8/include")
@@ -59,28 +62,31 @@ else()
   )
 endif()
 
+# SPDLOG
+if (NOT EXISTS ${CMAKE_SOURCE_DIR}/deps/spdlog)
+  include(ExternalProject)
+  ExternalProject_Add(spdlog
+    GIT_REPOSITORY    https://github.com/gabime/spdlog.git
+    GIT_TAG           v1.1.0
+    CMAKE_ARGS        -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/spdlog
+  )
 
+  add_dependencies(${PROJECT_NAME} spdlog)
+endif()
 
+include_directories(${CMAKE_SOURCE_DIR}/deps/spdlog/include)
 
 # Threads
 find_package(Threads)
-
 
 # libuv
 include_directories("${PROJECT_SOURCE_DIR}/deps/libuv/include")
 find_library(LIBUV_LIBRARY NAMES uv HINTS deps/libuv/out/Release)
 
-file(GLOB SOURCE_FILES src/*.cc src/**/*.cc)
-add_executable(${PROJECT} ${SOURCE_FILES})
-
-# MESSAGE("Linking: " ${V8_LIBRARIES} ${LIBUV_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} "rt")
 target_link_libraries(${PROJECT}
   ${V8_LIBRARIES}
   ${LIBUV_LIBRARY}
   ${CMAKE_THREAD_LIBS_INIT}
-  # dl
-  # rt
-  # c++abi
 )
 
 # copy snapshots

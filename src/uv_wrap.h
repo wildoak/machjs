@@ -8,10 +8,11 @@
 
 #include "mach.h"
 
-namespace mach {
-  namespace uv {
+#define UVWRAP_DO_OR_DIE(expr) _do_or_die(expr, #expr)
+#define UVWRAP_DO(expr) _do(expr, #expr)
 
-    #define UV_DO_OR_DIE(expr) _do_or_die(expr, #expr)
+namespace mach {
+  namespace uvwrap {
 
     class Error : public std::exception {
     public:
@@ -22,12 +23,19 @@ namespace mach {
       std::string message_;
     };
 
-    inline int _do_or_die(int err, const char *expr_str) {
-      CHECK(expr_str);
+    std::string error_msg(int err, const char *expr_str);
 
+    inline int _do_or_die(int err, const char *expr_str) {
       if (err < 0) {
-        throw mach::uv::Error(std::string()
-          + uv_err_name(err) + " " + uv_strerror(err) + ": " + expr_str);
+        throw Error(error_msg(err, expr_str));
+      }
+
+      return err;
+    }
+
+    inline int _do(int err, const char *expr_str) {
+      if (err < 0) {
+        mach::logger->error(error_msg(err, expr_str));
       }
 
       return err;
@@ -43,6 +51,7 @@ namespace mach {
         CHECK(this_pointer);
 
         uv_close(this_pointer->Handle(), HandleAware::CloseCallback);
+        mach::logger->debug("close {}", (void *)this_pointer);
       }
 
       static void CloseCallback(uv_handle_t *handle) {
@@ -51,6 +60,7 @@ namespace mach {
         T *this_pointer = static_cast<T *>(handle->data);
         CHECK(this_pointer);
 
+        mach::logger->debug("delete {}", (void *)this_pointer);
         delete this_pointer;
       }
 
@@ -64,6 +74,10 @@ namespace mach {
     public:
       HandleAware() {
         handle_.data = this;
+      }
+
+      virtual ~HandleAware() {
+        mach::logger->debug("destruct {}", (void *)this);
       }
 
       HandleAware(const HandleAware&) = delete;
@@ -98,7 +112,7 @@ namespace mach {
 
       operator uv_loop_t *();
 
-      void Run();
+      void Run(uv_run_mode mode = UV_RUN_DEFAULT);
 
     private:
       uv_loop_t loop_;

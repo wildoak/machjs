@@ -1,4 +1,4 @@
-.PHONY: install clean build
+.PHONY: install clean build run valgrind
 
 ifneq ($(RELEASE), 1)
     BUILD_TYPE = Debug
@@ -21,3 +21,11 @@ bin/$(BUILD_TYPE): bin
 
 clean:
 	rm -rf bin
+
+bin/$(BUILD_TYPE)/machjs: build
+
+run: bin/$(BUILD_TYPE)/machjs
+	bin/$(BUILD_TYPE)/machjs
+
+valgrind: bin/$(BUILD_TYPE)/machjs
+	valgrind --leak-check=full bin/Debug/machjs

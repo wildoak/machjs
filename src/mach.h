@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #define CHECK(expr)                               \
   do {                                            \
@@ -20,14 +22,21 @@ namespace mach {
     std::string message_;
   };
 
+  extern std::shared_ptr<spdlog::logger> logger;
+
+  void InitializeLogger();
+
   template<class T>
-  void nothrow(T &&fn) {
+  bool nothrow(T &&fn) {
     try {
       fn();
+      return true;
     } catch(std::exception &e) {
       std::cerr << e.what() << std::endl;
     } catch(...) {
       std::cerr << "unknown error occurred" << std::endl;
     }
+
+    return false;
   }
 }

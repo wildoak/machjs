@@ -1,7 +1,7 @@
 #include "uv_wrap.h"
 
 namespace mach {
-  namespace uv {
+  namespace uvwrap {
     
     
     // Error class
@@ -12,6 +12,20 @@ namespace mach {
       return message_.c_str();
     }
 
+    // error_msg
+    std::string error_msg(int err, const char *expr_str) {
+      std::string msg;
+      msg += uv_err_name(err);
+      msg += " ";
+      msg += uv_strerror(err);
+
+      if (expr_str) {
+        msg += ": ";
+        msg += expr_str;
+      }
+
+      return std::move(msg);
+    }
 
     // Loop class
 
@@ -20,12 +34,12 @@ namespace mach {
     }
 
     Loop::Loop() {
-      UV_DO_OR_DIE(uv_loop_init(&loop_));
+      UVWRAP_DO_OR_DIE(uv_loop_init(&loop_));
     }
 
     Loop::~Loop() {
       nothrow([this]() {
-        UV_DO_OR_DIE(uv_loop_close(&loop_));
+        UVWRAP_DO_OR_DIE(uv_loop_close(&loop_));
       });
     }
 
@@ -33,8 +47,8 @@ namespace mach {
       return &loop_;
     }
 
-    void Loop::Run() {
-      UV_DO_OR_DIE(uv_run(&loop_, UV_RUN_DEFAULT));
+    void Loop::Run(uv_run_mode mode) {
+      UVWRAP_DO_OR_DIE(uv_run(&loop_, mode));
     }
 
 
@@ -50,11 +64,11 @@ namespace mach {
       CHECK(loop);
 
       loop_ = std::move(loop);
-      UV_DO_OR_DIE(uv_timer_init(*loop_, &handle_));
+      UVWRAP_DO_OR_DIE(uv_timer_init(*loop_, &handle_));
     }
   
     void Timer::Start(uint64_t timeout, uint64_t repeat) {
-      UV_DO_OR_DIE(uv_timer_start(&handle_, Timer::TimerCallback, timeout, repeat));
+      UVWRAP_DO_OR_DIE(uv_timer_start(&handle_, Timer::TimerCallback, timeout, repeat));
     }
 
     void Timer::Start(uint64_t timeout) {
@@ -62,7 +76,7 @@ namespace mach {
     }
 
     void Timer::Stop() {
-      UV_DO_OR_DIE(uv_timer_stop(&handle_));
+      UVWRAP_DO_OR_DIE(uv_timer_stop(&handle_));
     }
 
     void Timer::SetCallback(std::function<void()> callback) {
