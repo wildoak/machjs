@@ -1,10 +1,13 @@
-#include "version.h"
-#include <v8.h>
-#include <libplatform/libplatform.h>
 #include "mach.h"
+#include "mach_api.h"
+#include "mach_api_use.h"
+#include "mach_environment.h"
+#include "mach_version.h"
 #include "main.h"
+#include <memory>
+#include <libplatform/libplatform.h>
+#include <v8.h>
 
-#include "uv_wrap.h"
 
 int main(int argc, char **argv) {
   mach::InitializeLogger();
@@ -20,7 +23,7 @@ void Init(int argc, char **argv) {
   v8::V8::InitializeICUDefaultLocation(argv[0]);
   v8::V8::InitializeExternalStartupData(argv[0]);
   std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
-  v8::V8::InitializePlatform(platform.get());
+  v8::V8::InitializePlatform(&*platform);
   v8::V8::Initialize();
 
   mach::logger->info("build  {}", MACHJS_BUILD_DATE);
@@ -29,70 +32,42 @@ void Init(int argc, char **argv) {
   mach::logger->info("V8     {}", v8::V8::GetVersion());
   mach::logger->info("       ---");
 
-  InitMach(argc, argv);
+  v8::Isolate::CreateParams create_params;
+  std::unique_ptr<v8::ArrayBuffer::Allocator> array_buffer_allocator(
+    v8::ArrayBuffer::Allocator::NewDefaultAllocator());
+  
+  create_params.array_buffer_allocator = &*array_buffer_allocator;
+  v8::Isolate *isolate = v8::Isolate::New(create_params);
+
+  {
+    mach::Environment env(isolate);
+    env.argv0 = argv[0];
+  
+    if (argc >= 2) {
+      RunMach(isolate, argv[1]);
+      env.loop.Run();
+      env.loop.Run();
+    } else {
+      mach::logger->warn("no file given");
+    }
+  }
+
+  isolate->Dispose();
   
   v8::V8::Dispose();
   v8::V8::ShutdownPlatform();
-  // delete create_params.array_buffer_allocator;
 }
 
-void InitMach(int argc, char **argv) {
 
-  using namespace uvwrap;
-  auto &&loop = Loop::New();
-  {
-    auto &&timer = Timer::New(loop);
-    timer->SetCallback([]() {
-      mach::logger->info("timer1 executed");
-    });
+void RunMach(v8::Isolate *isolate, const std::string &file_path) {
+  v8::Isolate::Scope isolate_scope(isolate);
+  v8::HandleScope handle_scope(isolate);
+  v8::Local<v8::Context> context = v8::Context::New(isolate);
+  v8::Context::Scope context_scope(context);
 
-    auto &&timer2 = Timer::New(loop);
-    int i = 0;
-    timer2->SetCallback([&i, &timer2]() {
-      mach::logger->info("timer2 executed");
-
-      if (i++ < 3) {
-        timer2->Start(1000);
-      }
-    });
-
-    timer->Start(3000);
-    timer2->Start(4000);
-
-    loop->Run();
-  }
-
-  // close handles
-  loop->Run();
+  mach::InitializeMachGlobal(isolate, *context);
+  
+  auto &&file_path_v8 = v8::String::NewFromUtf8(isolate, file_path.c_str());
+  auto &&result = mach::api_use(mach::FunctionCallMach<v8::Value>(isolate)({file_path_v8}));
+  mach::logger->info("returned: '{}'", *v8::String::Utf8Value(result->ToString()));
 }
-
-// v8::Isolate::CreateParams create_params;
-  // create_params.array_buffer_allocator =
-  //     v8::ArrayBuffer::Allocator::NewDefaultAllocator();
-  // v8::Isolate* isolate = v8::Isolate::New(create_params);
-  // {
-  //   v8::Isolate::Scope isolate_scope(isolate);
-  //   // Create a stack-allocated handle scope.
-  //   v8::HandleScope handle_scope(isolate);
-  //   // Create a new context.
-  //   v8::Local<v8::Context> context = v8::Context::New(isolate);
-  //   // Enter the context for compiling and running the hello world script.
-  //   v8::Context::Scope context_scope(context);
-  //   // Create a string containing the JavaScript source code.
-  //   v8::Local<v8::String> source =
-  //       v8::String::NewFromUtf8(isolate, "'Hello' + ', World!'",
-  //                               v8::NewStringType::kNormal)
-  //           .ToLocalChecked();
-  //   // Compile the source code.
-  //   v8::Local<v8::Script> script =
-  //       v8::Script::Compile(context, source).ToLocalChecked();
-  //   // Run the script to get the result.
-  //   v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
-  //   // Convert the result to an UTF8 string and print it.
-  //   v8::String::Utf8Value utf8(isolate, result);
-  //   printf("%s\n", *utf8);
-  // }
-  // // Dispose the isolate and tear down V8.
-  // isolate->Dispose();
-
-  // 2018-08-25 11:56:21 +0200

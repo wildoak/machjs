@@ -2,3 +2,6 @@
 /bin
 /.gclient
 /.gclient_entries
+
+# something to hack around :P
+/test.js

@@ -8,8 +8,8 @@
 
 #include "mach.h"
 
-#define UVWRAP_DO_OR_DIE(expr) _do_or_die(expr, #expr)
-#define UVWRAP_DO(expr) _do(expr, #expr)
+#define UVWRAP_DO_OR_DIE(expr) uvwrap::_do_or_die(expr, #expr)
+#define UVWRAP_DO(expr) uvwrap::_do(expr, #expr)
 
 namespace uvwrap {
 
@@ -136,6 +136,39 @@ namespace uvwrap {
   private:
     std::shared_ptr<Loop> loop_;
     std::function<void()> callback_;
+  };
+
+
+  template<class R, class T>
+  class ReqWrapper {
+  public:
+
+    template<class ...Args>
+    static std::unique_ptr<R> New(Args &&...args) {
+      return std::make_unique<R>(std::forward<Args>(args)...);
+    }
+
+    static std::unique_ptr<R> From(T *req) {
+      return std::unique_ptr<R>(static_cast<R *>(req->data));
+    }
+
+  protected:
+    ReqWrapper() {
+      req.data = this;
+    }
+    
+  public:
+    virtual ~ReqWrapper() {
+      uv_fs_req_cleanup(&req);
+    }
+
+  public:
+    operator T *() {
+      return &req;
+    }
+
+  private:
+    T req;
   };
   
 }
