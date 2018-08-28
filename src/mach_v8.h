@@ -47,34 +47,69 @@ namespace mach {
     v8::Isolate *isolate_;
   };
 
-  template<class T>
-  class ResolvingReq : public uvwrap::ReqWrapper<ResolvingReq<T>, T> {
+  template<class T, class ...V>
+  class UvReqWrapper {
   public:
-    ResolvingReq(v8::Isolate *isolate, v8::Local<v8::Promise::Resolver> resolver) : isolate_(isolate)
-    {
+    using My = UvReqWrapper<T, V...>;
+    using MyCallback = std::function<void(std::unique_ptr<My> &&, v8::Local<V>...)>;
+  public:
+    static std::unique_ptr<My> New(v8::Isolate *isolate, MyCallback callback, v8::Local<V> ...values) {
+      return std::make_unique<My>(isolate, std::move(callback), std::move(values)...);
+    }
+
+    static std::unique_ptr<My> From(T *req) {
+      return std::unique_ptr<My>(static_cast<My *>(req->data));
+    }
+
+    static void Callback(T* req) {
+      auto &&me = From(req);
+      auto &&isolate = me->GetIsolate();
+      v8::Isolate::Scope isolate_scope(isolate);
+      v8::HandleScope scope(isolate);
+      v8::Context::Scope context_scope(me->context_.Get(isolate));
+
+      // fetch values from from `me`, before moving
+      auto &&values = std::make_tuple<v8::Local<V>...>(std::get<v8::Global<std::remove_reference_t<V>>>(me->values_).Get(isolate)...);
+      me->callback_(std::move(me), std::get<v8::Local<V>>(values)...);
+    }
+  public:
+    UvReqWrapper(v8::Isolate *isolate, MyCallback callback, v8::Local<V> &&...values) {
+      isolate_ = isolate;
       context_ = v8::Global<v8::Context>(isolate, isolate->GetCurrentContext());
-      resolver_ = v8::Global<v8::Promise::Resolver>(isolate, resolver);
+      callback_ = std::move(callback);
+      values_ = std::make_tuple(v8::Global<V>(isolate, std::forward<v8::Local<V>>(values))...);
+
+      req_.data = this;
     }
 
-    v8::Local<v8::Promise::Resolver> GetResolver() const {
-      return resolver_.Get(isolate_);
-    }
-
-    v8::Isolate *GetIsolate() const {
+    v8::Isolate *GetIsolate() {
       return isolate_;
     }
 
-    v8::Maybe<bool> Resolve(v8::Local<v8::Value> value) {
-      return resolver_.Get(isolate_)->Resolve(context_.Get(isolate_), value);
+    T *Req() {
+      return &req_;
     }
 
-    v8::Maybe<bool> Reject(v8::Local<v8::Value> value) {
-      return resolver_.Get(isolate_)->Reject(context_.Get(isolate_), value);
+    operator T* () {
+      return &req_;
     }
 
+    void (*GetCallback())(T* req) {
+      return &Callback;
+    }
+    
   private:
+    T req_;
     v8::Isolate *isolate_;
     v8::Global<v8::Context> context_;
-    v8::Global<v8::Promise::Resolver> resolver_;
+    MyCallback callback_;
+    std::tuple<v8::Global<std::remove_reference_t<V>>...> values_;
   };
+
+  template<class T, class ...V>
+  std::unique_ptr<UvReqWrapper<T, V...>> MakeReq(v8::Isolate *isolate,
+                                                 typename UvReqWrapper<T, V...>::MyCallback callback,
+                                                 v8::Local<V> ...values) {
+    return UvReqWrapper<T, V...>::New(isolate, std::move(callback), std::move(values)...);
+  }
 }

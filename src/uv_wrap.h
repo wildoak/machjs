@@ -137,38 +137,5 @@ namespace uvwrap {
     std::shared_ptr<Loop> loop_;
     std::function<void()> callback_;
   };
-
-
-  template<class R, class T>
-  class ReqWrapper {
-  public:
-
-    template<class ...Args>
-    static std::unique_ptr<R> New(Args &&...args) {
-      return std::make_unique<R>(std::forward<Args>(args)...);
-    }
-
-    static std::unique_ptr<R> From(T *req) {
-      return std::unique_ptr<R>(static_cast<R *>(req->data));
-    }
-
-  protected:
-    ReqWrapper() {
-      req.data = this;
-    }
-    
-  public:
-    virtual ~ReqWrapper() {
-      uv_fs_req_cleanup(&req);
-    }
-
-  public:
-    operator T *() {
-      return &req;
-    }
-
-  private:
-    T req;
-  };
   
 }

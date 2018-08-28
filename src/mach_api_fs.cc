@@ -36,37 +36,27 @@ namespace mach {
     return scope_v8.Escape(content_v8.ToLocalChecked());
   }
 
-  
-
-  void fs_open_cb(uv_fs_t* req) {
-    auto &&wrapper = ResolvingReq<uv_fs_t>::From(req);
-
-    auto &&isolate = wrapper->GetIsolate();
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope scope(isolate);
-
-    auto &&undefined = v8::Undefined(isolate);
-    
-    if (uv_fs_get_result(req) != -1) {
-      wrapper->Resolve(undefined);
-    } else {
-      wrapper->Reject(undefined);
-    }
-
-    uv_fs_req_cleanup(req);
-  }
-
   v8::Local<v8::Value> api_fs_open(const FunctionCall<v8::Value> &info) {
     auto &&env = Environment::Get(info.GetIsolate());
     v8::EscapableHandleScope scope(info.GetIsolate());
 
     auto &&resolver = v8::Promise::Resolver::New(info.GetIsolate());
-    
-    auto &&req = ResolvingReq<uv_fs_t>::New(info.GetIsolate(), resolver);
 
+    auto &&req_wrapper = MakeReq<uv_fs_t>(info.GetIsolate(), [](auto &&req_wrapper, auto &&resolver) {
+      auto &&result = uv_fs_get_result(*req_wrapper);
+      if (result == -1) {
+        resolver->Reject(v8::Undefined(req_wrapper->GetIsolate()));
+      } else {
+        resolver->Resolve(v8::Integer::New(req_wrapper->GetIsolate(), result));
+      }
+
+      uv_fs_req_cleanup(*req_wrapper);
+    }, resolver);
+    
     auto &&path = info[0]->ToString();
     v8::String::Utf8Value path_value(info.GetIsolate(), path);
-    UVWRAP_DO_OR_DIE(uv_fs_open(env->loop, *req.release(), *path_value, O_WRONLY | O_CREAT, S_IRUSR, fs_open_cb));
+    UVWRAP_DO_OR_DIE(uv_fs_open(env->loop, *req_wrapper.release(), *path_value, O_WRONLY | O_CREAT, S_IRUSR,
+      req_wrapper->GetCallback()));
 
     return scope.Escape(resolver->GetPromise());
   }
